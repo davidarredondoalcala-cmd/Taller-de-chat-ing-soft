@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Chat en tiempo real - Socket.IO</title>
+  <title>Chat en tiempo real - Socket.IO, Mongo & WebRTC</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -39,18 +39,82 @@
       <div class="chat-header">
         <div class="chat-title">
           <span class="chat-title-main">💬 Sala General</span>
+          <span class="chat-status-db" id="db-status" title="Conexión MongoDB">● Base de datos</span>
         </div>
       </div>
 
       <ul id="mensajes"></ul>
       <p id="escribiendo" class="escribiendo"></p>
 
-      <!-- Formulario de envío -->
+      <!-- Panel emergente de stickers -->
+      <div id="sticker-drawer" class="sticker-drawer oculto">
+        <div class="sticker-drawer-header">
+          <span>Elige un Sticker</span>
+          <button type="button" id="btn-cerrar-stickers" class="btn-icon">✕</button>
+        </div>
+        <div class="sticker-grid" id="sticker-grid"></div>
+      </div>
+
+      <!-- Formulario de envío con archivos y stickers -->
       <form id="form-mensaje">
+        <input type="file" id="input-archivo" class="oculto" />
+        
+        <button type="button" id="btn-adjuntar" class="btn-extra" title="Subir archivo o foto">📎</button>
+        <button type="button" id="btn-stickers" class="btn-extra" title="Enviar stickers">🐱</button>
+        
         <input id="input-mensaje" placeholder="Escribe un mensaje..." autocomplete="off" />
         <button type="submit" id="btn-enviar" title="Enviar mensaje">Enviar</button>
       </form>
     </main>
+  </div>
+
+  <!-- Modal de llamada entrante -->
+  <div id="modal-llamada-entrante" class="modal-overlay oculto">
+    <div class="modal-card">
+      <div class="llamada-avatar" id="avatar-llamante">📞</div>
+      <h3 id="texto-llamante">Llamada entrante...</h3>
+      <p id="tipo-llamada-entrante">Te están llamando</p>
+      <div class="acciones-llamada">
+        <button type="button" id="btn-aceptar-llamada" class="btn-call-accept">Aceptar</button>
+        <button type="button" id="btn-rechazar-llamada" class="btn-call-reject">Rechazar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Overlay de Video / Audio llamada activa -->
+  <div id="panel-videollamada" class="videocall-overlay oculto">
+    <div class="videocall-container">
+      <div class="videocall-header">
+        <div class="videocall-info">
+          <span id="call-peer-name">En llamada</span>
+          <span id="call-timer">00:00</span>
+        </div>
+      </div>
+
+      <div class="video-grid">
+        <!-- Video remoto (pantalla principal) -->
+        <div class="video-wrapper remote-wrapper">
+          <video id="remote-video" autoplay playsinline></video>
+          <div id="remote-avatar-placeholder" class="avatar-placeholder oculto">
+            <div class="placeholder-icon">👤</div>
+            <span id="remote-placeholder-name">Conectado por audio</span>
+          </div>
+        </div>
+
+        <!-- Video local (miniatura PiP) -->
+        <div class="video-wrapper local-wrapper">
+          <video id="local-video" autoplay playsinline muted></video>
+          <div id="local-avatar-placeholder" class="avatar-placeholder-sm oculto">👤</div>
+        </div>
+      </div>
+
+      <!-- Barra de controles de la llamada -->
+      <div class="videocall-controls">
+        <button type="button" id="btn-toggle-mic" class="control-btn" title="Silenciar / Activar micrófono">🎙️</button>
+        <button type="button" id="btn-toggle-cam" class="control-btn" title="Apagar / Encender cámara">📷</button>
+        <button type="button" id="btn-colgar" class="control-btn hangup-btn" title="Colgar llamada">📞 Colgar</button>
+      </div>
+    </div>
   </div>
 
   <!-- Script de Socket.IO provisto por el servidor -->
