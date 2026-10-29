@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chat en tiempo real - Socket.IO</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Pantalla 1: Login -->
+  <div id="login" class="card">
+    <div class="login-header">
+      <div class="logo-icon">💬</div>
+      <h1>Entrar al chat</h1>
+      <p class="subtitulo">Ingresa tu nombre para conectarte con tus compañeros</p>
+    </div>
+    <form id="form-login">
+      <input id="input-nombre" placeholder="Tu nombre o apodo..." autocomplete="off" required autofocus />
+      <button type="submit">Entrar al chat</button>
+    </form>
+  </div>
+
+  <!-- Pantalla 2: El chat principal -->
+  <div id="chat" class="oculto">
+    <!-- Barra lateral de usuarios conectados -->
+    <aside>
+      <div class="aside-header">
+        <h2>Conectados <span id="contador-usuarios">(0)</span></h2>
+      </div>
+      <ul id="lista-usuarios"></ul>
+      <div class="mi-perfil">
+        <span class="punto-online"></span>
+        <span id="mi-nombre-display">Tú</span>
+      </div>
+    </aside>
+
+    <!-- Área principal de conversación -->
+    <main>
+      <div class="chat-header">
+        <div class="chat-title">
+          <span class="chat-title-main">💬 Sala General</span>
+        </div>
+      </div>
+
+      <ul id="mensajes"></ul>
+      <p id="escribiendo" class="escribiendo"></p>
+
+      <!-- Formulario de envío -->
+      <form id="form-mensaje">
+        <input id="input-mensaje" placeholder="Escribe un mensaje..." autocomplete="off" />
+        <button type="submit" id="btn-enviar" title="Enviar mensaje">Enviar</button>
+      </form>
+    </main>
+  </div>
+
+  <!-- Script de Socket.IO provisto por el servidor -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="client.js"></script>
+</body>
+</html>

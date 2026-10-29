@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Chat en tiempo real</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Layout: escena de tres paneles (dos navegadores con el servidor en medio);
+     el resto es documentación a una columna de 68ch. */
+  :root {
+    --bg: #f4f7f7;
+    --surface: #ffffff;
+    --sunk: #eaf0f0;
+    --ink: #0d1518;
+    --muted: #57696e;
+    --line: #d8e2e3;
+    --accent: #0a7d72;
+    --accent-soft: #d9ecea;
+    --signal: #a84f08;
+    --signal-soft: #f9e7d6;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b1113;
+      --surface: #131b1e;
+      --sunk: #0e1619;
+      --ink: #e7efef;
+      --muted: #92a4a8;
+      --line: #223033;
+      --accent: #43d2c1;
+      --accent-soft: #0f3330;
+      --signal: #f0a662;
+      --signal-soft: #35230f;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b1113;
+    --surface: #131b1e;
+    --sunk: #0e1619;
+    --ink: #e7efef;
+    --muted: #92a4a8;
+    --line: #223033;
+    --accent: #43d2c1;
+    --accent-soft: #0f3330;
+    --signal: #f0a662;
+    --signal-soft: #35230f;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 0 72px;
+  }
+
+  .wrap { max-width: 980px; margin: 0 auto; }
+  .col { max-width: 68ch; }
+
+  h1, h2, h3 { font-family: var(--mono); font-weight: 600; text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(28px, 5vw, 44px); line-height: 1.12; letter-spacing: -0.02em; }
+  h2 { font-size: clamp(20px, 3vw, 26px); letter-spacing: -0.01em; }
+  h3 { font-size: 16px; }
+  p { margin: 0; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  header.hero { padding-block: 56px 32px; display: flex; flex-direction: column; gap: 18px; }
+  header.hero p.lead { font-size: 18px; color: var(--muted); max-width: 56ch; }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .btn {
+    font-family: var(--mono); font-size: 13px; font-weight: 500;
+    padding: 9px 16px; border-radius: 7px; border: 1px solid var(--line);
+    background: var(--surface); color: var(--ink); cursor: pointer;
+    text-decoration: none; display: inline-block;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+  .btn.primary:hover { color: var(--bg); opacity: 0.9; }
+  .btn:focus-visible, .mode-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ---------- escena ---------- */
+  section.stage-wrap { margin-block: 8px 64px; }
+
+  .modes { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; width: fit-content; margin-bottom: 14px; }
+  .mode-btn {
+    font-family: var(--mono); font-size: 12.5px; font-weight: 500;
+    padding: 8px 16px; border: 0; background: var(--surface); color: var(--muted); cursor: pointer;
+  }
+  .mode-btn + .mode-btn { border-left: 1px solid var(--line); }
+  .mode-btn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+
+  .stage {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 22px;
+    display: grid;
+    grid-template-columns: 1fr 150px 1fr;
+    gap: 16px;
+    align-items: center;
+  }
+  @media (max-width: 760px) {
+    .stage { grid-template-columns: 1fr; }
+  }
+
+  .browser { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: var(--sunk); min-width: 0; }
+  .browser .bar {
+    display: flex; align-items: center; gap: 7px;
+    padding: 7px 10px; border-bottom: 1px solid var(--line); background: var(--surface);
+    font-family: var(--mono); font-size: 11.5px; color: var(--muted);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); flex: none; }
+  .log { padding: 12px; display: flex; flex-direction: column; gap: 8px; min-height: 132px; justify-content: flex-end; }
+
+  .bubble {
+    font-size: 13.5px; line-height: 1.45;
+    padding: 7px 11px; border-radius: 10px;
+    background: var(--surface); border: 1px solid var(--line);
+    max-width: 85%; align-self: flex-start;
+    transition: opacity 240ms ease, transform 240ms ease;
+  }
+  .bubble.own { align-self: flex-end; background: var(--accent-soft); border-color: transparent; }
+  .bubble .who { display: block; font-family: var(--mono); font-size: 10.5px; color: var(--accent); margin-bottom: 1px; }
+  .bubble.hidden { opacity: 0; transform: translateY(6px); }
+
+  .waiting {
+    font-family: var(--mono); font-size: 11.5px; color: var(--muted);
+    align-self: center; text-align: center; padding: 6px 0;
+  }
+
+  .server {
+    border: 1px solid var(--line); border-radius: 9px;
+    background: var(--sunk); padding: 14px 10px; text-align: center;
+    transition: border-color 200ms ease, background 200ms ease;
+  }
+  .server.lit { border-color: var(--accent); background: var(--accent-soft); }
+  .server .name { font-family: var(--mono); font-size: 12.5px; font-weight: 600; letter-spacing: 0.04em; }
+  .server .note { font-size: 11.5px; color: var(--muted); line-height: 1.35; margin-top: 4px; }
+
+  .packet {
+    position: absolute; top: 0; left: 0;
+    width: 13px; height: 13px; border-radius: 50%;
+    background: var(--accent);
+    opacity: 0; pointer-events: none;
+    transition: transform 620ms cubic-bezier(.45,.05,.3,1), opacity 180ms ease;
+  }
+  .packet.http { background: var(--signal); }
+
+  .caption {
+    margin-top: 12px; min-height: 42px;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .caption code {
+    font-family: var(--mono); font-size: 13px; color: var(--accent);
+    background: var(--accent-soft); padding: 2px 6px; border-radius: 5px; width: fit-content;
+  }
+  .caption .http-code { color: var(--signal); background: var(--signal-soft); }
+  .caption .say { font-size: 14px; color: var(--muted); }
+
+  /* ---------- contenido ---------- */
+  section.block { margin-block: 56px; }
+  section.block > .col > * + * { margin-top: 16px; }
+
+  pre {
+    font-family: var(--mono); font-size: 13px; line-height: 1.65;
+    background: var(--sunk); border: 1px solid var(--line); border-radius: 9px;
+    padding: 14px 16px; overflow-x: auto; margin: 0;
+  }
+  pre .c { color: var(--muted); }
+  code { font-family: var(--mono); font-size: 0.92em; }
+  p code, li code, td code { background: var(--sunk); padding: 1px 5px; border-radius: 4px; }
+
+  ol.retos { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 2px; counter-reset: r; }
+  ol.retos li {
+    display: grid; grid-template-columns: 34px 1fr; gap: 14px;
+    padding: 16px 0; border-top: 1px solid var(--line);
+  }
+  ol.retos li::before {
+    counter-increment: r; content: counter(r);
+    font-family: var(--mono); font-size: 13px; color: var(--accent); padding-top: 2px;
+  }
+  ol.retos .what { font-weight: 600; }
+  ol.retos .how { color: var(--muted); font-size: 15px; margin-top: 3px; }
+  ol.retos .test { font-size: 13.5px; margin-top: 7px; color: var(--ink); }
+  ol.retos .test b { font-family: var(--mono); font-weight: 500; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); display: block; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  .scroll { overflow-x: auto; }
+  th, td { text-align: left; padding: 10px 12px 10px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-family: var(--mono); font-size: 11.5px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  td.pts { font-variant-numeric: tabular-nums; text-align: right; padding-right: 0; white-space: nowrap; }
+
+  .warn { border-left: 2px solid var(--signal); padding-left: 14px; }
+  .warn .tag { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--signal); }
+
+  footer { margin-top: 64px; padding-top: 22px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .packet, .bubble, .server { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="hero">
+    <span class="eyebrow">Taller · Socket.IO</span>
+    <h1>Un chat donde el mensaje llega solo</h1>
+    <p class="lead">Sin recargar, sin botón de actualizar. El proyecto ya trae el diseño y el servidor montados: faltan once líneas que escribes tú.</p>
+    <div class="actions">
+      <a class="btn primary" href="https://github.com/JuanBonilla1305/taller-chat-socketio">Abrir el proyecto en GitHub</a>
+      <button class="btn" id="replay" type="button">Ver cómo viaja un mensaje</button>
+    </div>
+  </header>
+
+  <section class="stage-wrap">
+    <div class="modes" role="group" aria-label="Modo de transporte">
+      <button class="mode-btn" type="button" id="m-ws" aria-pressed="true">Con WebSocket</button>
+      <button class="mode-btn" type="button" id="m-http" aria-pressed="false">Con HTTP normal</button>
+    </div>
+
+    <div class="stage" id="stage">
+      <div class="browser">
+        <div class="bar"><span class="dot"></span> Ana</div>
+        <div class="log" id="log-a">
+          <div class="bubble own" id="b-a"><span class="who">Ana</span>¿Me ves?</div>
+        </div>
+      </div>
+
+      <div class="server" id="server">
+        <div class="name">SERVIDOR</div>
+        <div class="note">le pone el autor y la hora</div>
+      </div>
+
+      <div class="browser">
+        <div class="bar"><span class="dot"></span> Luis</div>
+        <div class="log" id="log-b">
+          <div class="bubble" id="b-b"><span class="who">Ana</span>¿Me ves?</div>
+          <div class="waiting" id="waiting" hidden>sigue vacío hasta recargar</div>
+        </div>
+      </div>
+
+      <div class="packet" id="packet" aria-hidden="true"></div>
+    </div>
+
+    <div class="caption" id="caption" aria-live="polite">
+      <code id="cap-code">io.emit('mensaje', { autor, texto, hora })</code>
+      <span class="say" id="cap-say">El servidor reparte el mensaje a todos los conectados.</span>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="col">
+      <span class="eyebrow">Lo que tienes que entender</span>
+      <h2>Cinco instrucciones</h2>
+      <p>Todo el taller se reduce a esto. En el servidor:</p>
+<pre><span class="c">// socket = ESE cliente en particular</span>
+io.on('connection', (socket) =&gt; { ... })
+
+socket.on('evento', (data) =&gt; { ... })  <span class="c">// escuchar a ese cliente</span>
+socket.emit('evento', data)             <span class="c">// mandarle solo a él</span>
+socket.broadcast.emit('evento', data)   <span class="c">// a todos MENOS a él</span>
+io.emit('evento', data)                 <span class="c">// a TODOS</span></pre>
+      <p>En el navegador:</p>
+<pre>const socket = io();                    <span class="c">// abre la conexión</span>
+socket.emit('evento', data)             <span class="c">// mandar al servidor</span>
+socket.on('evento', (data) =&gt; { ... })  <span class="c">// escuchar al servidor</span></pre>
+      <div class="warn">
+        <span class="tag">La regla de oro</span>
+        <p>El cliente manda <em>solo el texto</em>. El autor lo pone el servidor. Si confías en el autor que manda el cliente, cualquiera escribe haciéndose pasar por otro desde la consola del navegador. Vale 10 puntos de la rúbrica.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="col">
+      <span class="eyebrow">Once huecos, en orden</span>
+      <h2>Los retos</h2>
+      <p>Cada uno está marcado con <code>TODO</code> en <code>server.js</code> y en <code>public/client.js</code>. Hazlos en orden y prueba después de cada uno.</p>
+      <ol class="retos">
+        <li>
+          <div>
+            <div class="what">Entrar con un nombre</div>
+            <div class="how">El cliente emite <code>entrar</code>. El servidor lo guarda en el <code>Map</code> usando <code>socket.id</code> como llave y avisa a todos.</div>
+            <div class="test"><b>Prueba</b>Al entrar la segunda ventana, en la primera aparece «Luis se unió al chat».</div>
+          </div>
+        </li>
+        <li>
+          <div>
+            <div class="what">Mandar y recibir mensajes</div>
+            <div class="how">El cliente emite <code>mensaje</code> con el texto. El servidor arma <code>{ autor, texto, hora }</code> y lo reparte con <code>io.emit</code>.</div>
+            <div class="test"><b>Prueba</b>Escribes en una ventana y aparece en las dos al instante.</div>
+          </div>
+        </li>
+        <li>
+          <div>
+            <div class="what">Lista de conectados</div>
+            <div class="how">Cuando alguien entra o sale, el servidor manda <code>io.emit('usuarios', [...usuarios.values()])</code>.</div>
+            <div class="test"><b>Prueba</b>Los dos nombres aparecen en ambas ventanas.</div>
+          </div>
+        </li>
+        <li>
+          <div>
+            <div class="what">«Fulano está escribiendo…»</div>
+            <div class="how">Aquí va <code>socket.broadcast.emit</code>, no <code>io.emit</code>. Con <code>io.emit</code> te verías a ti mismo escribiendo.</div>
+            <div class="test"><b>Prueba</b>Luis lo ve cuando Ana teclea, y Ana no se ve a sí misma.</div>
+          </div>
+        </li>
+        <li>
+          <div>
+            <div class="what">Salir bien</div>
+            <div class="how">En <code>socket.on('disconnect')</code> borras al usuario del <code>Map</code>, avisas y mandas la lista actualizada.</div>
+            <div class="test"><b>Prueba</b>Cierras una ventana y desaparece de la lista de la otra.</div>
+          </div>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="col">
+      <span class="eyebrow">Léelo antes de pedir ayuda</span>
+      <h2>Trampas típicas</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Síntoma</th><th>Causa</th></tr></thead>
+          <tbody>
+            <tr><td><code>io is not defined</code></td><td>Falta el <code>&lt;script src="/socket.io/socket.io.js"&gt;</code>, o va después de <code>client.js</code>.</td></tr>
+            <tr><td>El mensaje llega dos veces</td><td>Pusiste el <code>socket.on</code> dentro de otro listener, así que se registra de nuevo en cada evento.</td></tr>
+            <tr><td>Me veo a mí mismo escribiendo</td><td>Usaste <code>io.emit</code> en vez de <code>socket.broadcast.emit</code>.</td></tr>
+            <tr><td>Funciona en mi PC, no entre dos</td><td>El cliente apunta a <code>localhost</code>. Usa <code>io()</code> sin argumentos.</td></tr>
+            <tr><td>Quedan usuarios fantasma</td><td>Falta el <code>disconnect</code>, o borras del <code>Map</code> por nombre en vez de por <code>socket.id</code>.</td></tr>
+            <tr><td><code>EADDRINUSE</code></td><td>Ya tienes un servidor en el 3000. Ciérralo o cambia el puerto.</td></tr>
+            <tr><td>Un compañero rompe la página</td><td>Pintaste con <code>innerHTML</code> en vez de <code>textContent</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="col">
+      <span class="eyebrow">Cómo se califica</span>
+      <h2>La entrega</h2>
+      <p>Repositorio público sin <code>node_modules</code>, mínimo seis commits, una captura con dos usuarios chateando, y el archivo <code>PLANTILLA-README.md</code> renombrado a <code>README.md</code> y lleno.</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Criterio</th><th class="pts">Pts</th></tr></thead>
+          <tbody>
+            <tr><td>Entrar con nombre y aviso de sistema</td><td class="pts">15</td></tr>
+            <tr><td>Mensajes en tiempo real entre varios clientes</td><td class="pts">25</td></tr>
+            <tr><td>Lista de conectados actualizada</td><td class="pts">15</td></tr>
+            <tr><td>Indicador de escritura con broadcast correcto</td><td class="pts">10</td></tr>
+            <tr><td>Desconexión limpia</td><td class="pts">10</td></tr>
+            <tr><td>El autor lo define el servidor</td><td class="pts">10</td></tr>
+            <tr><td>Commits, README propio y repo ordenado</td><td class="pts">10</td></tr>
+            <tr><td>Al menos un reto extra funcionando</td><td class="pts">5</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="col">
+      <p>¿Atascado? El <code>README.md</code> del repositorio trae la teoría completa, los retos extra y las preguntas de sustentación.</p>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  var stage = document.getElementById('stage');
+  var packet = document.getElementById('packet');
+  var server = document.getElementById('server');
+  var bubbleA = document.getElementById('b-a');
+  var bubbleB = document.getElementById('b-b');
+  var waiting = document.getElementById('waiting');
+  var capCode = document.getElementById('cap-code');
+  var capSay = document.getElementById('cap-say');
+  var replay = document.getElementById('replay');
+  var mWs = document.getElementById('m-ws');
+  var mHttp = document.getElementById('m-http');
+
+  var mode = 'ws';
+  var run = 0;
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function centerOf(el) {
+    var a = el.getBoundingClientRect();
+    var b = stage.getBoundingClientRect();
+    return { x: a.left - b.left + a.width / 2, y: a.top - b.top + a.height / 2 };
+  }
+
+  function place(p, visible) {
+    packet.style.transform = 'translate(' + (p.x - 6.5) + 'px,' + (p.y - 6.5) + 'px)';
+    packet.style.opacity = visible ? '1' : '0';
+  }
+
+  function say(code, text, isHttp) {
+    capCode.textContent = code;
+    capCode.className = isHttp ? 'http-code' : '';
+    capSay.textContent = text;
+  }
+
+  function wait(ms, token) {
+    return new Promise(function (res) {
+      setTimeout(function () { if (token === run) res(); }, reduced ? Math.min(ms, 60) : ms);
+    });
+  }
+
+  function resting() {
+    bubbleA.classList.remove('hidden');
+    bubbleB.classList.toggle('hidden', mode === 'http');
+    waiting.hidden = mode !== 'http';
+    server.classList.remove('lit');
+    packet.style.opacity = '0';
+    if (mode === 'ws') {
+      say("io.emit('mensaje', { autor, texto, hora })", 'El servidor reparte el mensaje a todos los conectados.', false);
+    } else {
+      say('GET /mensajes', 'El navegador de Luis no se entera: tiene que volver a preguntar.', true);
+    }
+  }
+
+  async function play() {
+    run++;
+    var token = run;
+    packet.classList.toggle('http', mode === 'http');
+
+    bubbleA.classList.add('hidden');
+    bubbleB.classList.add('hidden');
+    waiting.hidden = true;
+    server.classList.remove('lit');
+    packet.style.opacity = '0';
+    say('…', 'Ana escribe en su navegador.', mode === 'http');
+    await wait(360, token);
+    if (token !== run) return;
+
+    bubbleA.classList.remove('hidden');
+    await wait(420, token);
+    if (token !== run) return;
+
+    var from = centerOf(bubbleA);
+    var at = centerOf(server);
+    var to = centerOf(bubbleB);
+
+    packet.style.transition = 'none';
+    place(from, false);
+    void packet.offsetWidth;
+    packet.style.transition = '';
+    place(from, true);
+    say("socket.emit('mensaje', texto)", 'Sube solo el texto. El autor no viaja.', mode === 'http');
+    await wait(60, token);
+    if (token !== run) return;
+
+    place(at, true);
+    await wait(700, token);
+    if (token !== run) return;
+
+    packet.style.opacity = '0';
+    server.classList.add('lit');
+    say('autor = usuarios.get(socket.id)', 'El servidor le pone el autor y la hora.', mode === 'http');
+    await wait(620, token);
+    if (token !== run) return;
+
+    server.classList.remove('lit');
+
+    if (mode === 'http') {
+      waiting.hidden = false;
+      say('GET /mensajes', 'Aquí se acaba. Con HTTP el servidor no puede hablar primero.', true);
+      return;
+    }
+
+    packet.style.transition = 'none';
+    place(at, false);
+    void packet.offsetWidth;
+    packet.style.transition = '';
+    place(at, true);
+    await wait(60, token);
+    if (token !== run) return;
+
+    place(to, true);
+    say("io.emit('mensaje', { autor, texto, hora })", 'El servidor reparte el mensaje a todos los conectados.', false);
+    await wait(620, token);
+    if (token !== run) return;
+
+    packet.style.opacity = '0';
+    bubbleB.classList.remove('hidden');
+  }
+
+  function setMode(next) {
+    mode = next;
+    mWs.setAttribute('aria-pressed', String(next === 'ws'));
+    mHttp.setAttribute('aria-pressed', String(next === 'http'));
+    run++;
+    play();
+  }
+
+  mWs.addEventListener('click', function () { setMode('ws'); });
+  mHttp.addEventListener('click', function () { setMode('http'); });
+  replay.addEventListener('click', function () { play(); });
+  window.addEventListener('resize', function () { if (run === 0) resting(); });
+
+  resting();
+  if (!reduced) setTimeout(play, 700);
+})();
+</script>
+
+</body>
+</html>
